@@ -140,9 +140,15 @@ body{margin:0;background:var(--paper);color:var(--ink);font:400 16px/1.5 var(--s
   padding:.55rem .9rem;border-bottom:1px solid var(--line);
   border-radius:var(--radius) var(--radius) 0 0;
   display:flex;align-items:baseline;gap:.6rem}
-/* маркер дня: та же точка, что у пар, но неподвижная */
+/* Маркер дня: та же точка, что у пар. Медленно «дышит» — не кольцом,
+   как идущая пара, чтобы эти два знака не путались. */
 .day__head::before{content:"";flex:none;align-self:center;
-  width:8px;height:8px;border-radius:50%;background:var(--accent)}
+  width:8px;height:8px;border-radius:50%;background:var(--accent);
+  animation:breathe-day 4.5s ease-in-out infinite}
+@keyframes breathe-day{
+  0%,100%{transform:scale(1);opacity:.85}
+  50%{transform:scale(1.3);opacity:1}
+}
 .day__name{font-size:1rem;font-weight:700;letter-spacing:-.01em}
 .day__date{margin-left:auto;font-family:var(--mono);font-size:.76rem;color:var(--ink-2)}
 
@@ -224,7 +230,8 @@ body{margin:0;background:var(--paper);color:var(--ink);font:400 16px/1.5 var(--s
 .stamp-line{margin:0;font-family:var(--mono)}
 
 @media (prefers-reduced-motion:reduce){
-  *{transition:none!important;animation:none!important}
+  /* «*» не покрывает псевдоэлементы, а точки нарисованы именно ими */
+  *,*::before,*::after{transition:none!important;animation:none!important}
   /* анимация выключена — заливку задаём статично, иначе изменение потеряется */
   .lesson--changed{background:color-mix(in srgb,var(--change) 18%,var(--card))}
 }
