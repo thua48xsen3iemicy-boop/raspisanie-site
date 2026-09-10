@@ -135,8 +135,10 @@ body{margin:0;background:var(--paper);color:var(--ink);font:400 16px/1.5 var(--s
 /* Дни */
 .schedule{margin-top:1.6rem}
 .day{margin-bottom:1.7rem}
-.day__head{position:sticky;top:0;z-index:2;background:var(--paper);margin:0 0 .5rem;
-  padding:.5rem 0;border-bottom:1px solid var(--line);
+/* Шапка таблицы: тот же фон, что у пар, и общий с ними верхний край */
+.day__head{position:sticky;top:0;z-index:2;background:var(--card);margin:0;
+  padding:.55rem .9rem;border-bottom:1px solid var(--line);
+  border-radius:var(--radius) var(--radius) 0 0;
   display:flex;align-items:baseline;gap:.6rem}
 .day__name{font-size:1rem;font-weight:700;letter-spacing:-.01em}
 .day__date{font-family:var(--mono);font-size:.76rem;color:var(--ink-2)}
@@ -146,7 +148,8 @@ body{margin:0;background:var(--paper);color:var(--ink);font:400 16px/1.5 var(--s
 @media (min-width:44rem){.lesson{grid-template-columns:6.6rem 1fr;gap:1.2rem}}
 .slot{margin:0;text-align:right;padding:.9rem .7rem .8rem;font-family:var(--mono);line-height:1.35;
   background:var(--card);border-top:1px solid var(--line);border-right:1px solid var(--line)}
-.lesson:first-of-type .slot{border-top-left-radius:var(--radius)}
+.lesson:first-of-type .slot,
+.lesson:first-of-type .lesson__card{border-top:0}
 .lesson:last-of-type .slot{border-bottom:1px solid var(--line);
   border-bottom-left-radius:var(--radius)}
 .slot__no{display:block;font-size:.7rem;color:var(--ink-2)}
@@ -155,7 +158,6 @@ body{margin:0;background:var(--paper);color:var(--ink);font:400 16px/1.5 var(--s
 
 .lesson__card{position:relative;background:var(--card);padding:.8rem 1rem;
   border-left:1px solid var(--line);border-top:1px solid var(--line);transition:background .15s ease}
-.lesson:first-of-type .lesson__card{border-top-right-radius:var(--radius)}
 .lesson:last-of-type .lesson__card{border-bottom:1px solid var(--line);
   border-bottom-right-radius:var(--radius)}
 .lesson__card::before{content:"";position:absolute;left:-4px;top:1.05rem;
@@ -210,6 +212,7 @@ body{margin:0;background:var(--paper);color:var(--ink);font:400 16px/1.5 var(--s
 /* Пусто */
 .free{margin:0;padding:.9rem;text-align:center;font-size:.88rem;color:var(--ink-2);
   background:var(--card);border:1px dashed var(--line);border-radius:var(--radius)}
+.day__head + .free{border-top:0;border-top-left-radius:0;border-top-right-radius:0}
 .free--week{padding:2.5rem 1rem}
 
 /* Подвал */
