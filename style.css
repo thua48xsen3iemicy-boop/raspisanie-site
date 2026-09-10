@@ -212,7 +212,7 @@ body{margin:0;background:var(--paper);color:var(--ink);font:400 16px/1.5 var(--s
 /* Пусто */
 .free{margin:0;padding:.9rem;text-align:center;font-size:.88rem;color:var(--ink-2);
   background:var(--card);border:1px dashed var(--line);border-radius:var(--radius)}
-.day__head + .free{border-top:0;border-top-left-radius:0;border-top-right-radius:0}
+.day__head + .free{font-weight:600;border-top:0;border-top-left-radius:0;border-top-right-radius:0}
 .free--week{padding:2.5rem 1rem}
 
 /* Подвал */
