@@ -141,7 +141,7 @@ body{margin:0;background:var(--paper);color:var(--ink);font:400 16px/1.5 var(--s
   border-radius:var(--radius) var(--radius) 0 0;
   display:flex;align-items:baseline;gap:.6rem}
 .day__name{font-size:1rem;font-weight:700;letter-spacing:-.01em}
-.day__date{font-family:var(--mono);font-size:.76rem;color:var(--ink-2)}
+.day__date{margin-left:auto;font-family:var(--mono);font-size:.76rem;color:var(--ink-2)}
 
 /* Пара */
 .lesson{display:grid;grid-template-columns:5.4rem 1fr;gap:.9rem}
