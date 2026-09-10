@@ -175,15 +175,23 @@ body{margin:0;background:var(--paper);color:var(--ink);font:400 16px/1.5 var(--s
 .subject--free{font-weight:500;color:var(--ink-2)}
 
 /* Изменение: в выгрузке такая ячейка залита зелёным */
+/* Контур рисуем outline, а не рамкой: соседние карточки делят между собой
+   одну границу, и рамкой замкнутый прямоугольник не получится. */
 .lesson--changed .slot,
-.lesson--changed .lesson__card{animation:pulse-change 3.2s ease-in-out infinite}
-.lesson--changed .lesson__card{border-left-color:var(--change)}
-.lesson--changed:not(.lesson--free) .lesson__card{border-left-style:solid}
+.lesson--changed .lesson__card{border-color:var(--change);
+  outline:1px solid var(--change);outline-offset:-1px;
+  animation:pulse-change 3.2s ease-in-out infinite}
+/* у окна контур пунктирный — как и его левая граница */
+.lesson--changed.lesson--free .slot,
+.lesson--changed.lesson--free .lesson__card{outline-style:dashed}
 .lesson--changed .lesson__card::before{background:var(--change)}
 .tag--change{background:var(--change);color:#1d2b06}
 @keyframes pulse-change{
-  0%,100%{background:color-mix(in srgb,var(--change) 8%,var(--card))}
-  50%{background:color-mix(in srgb,var(--change) 26%,var(--card))}
+  0%,100%{background:color-mix(in srgb,var(--change) 8%,var(--card));
+    border-color:color-mix(in srgb,var(--change) 55%,var(--line));
+    outline-color:color-mix(in srgb,var(--change) 55%,var(--line))}
+  50%{background:color-mix(in srgb,var(--change) 26%,var(--card));
+    border-color:var(--change);outline-color:var(--change)}
 }
 
 /* Идёт сейчас: жёлтая полоса и расходящееся кольцо у точки */
