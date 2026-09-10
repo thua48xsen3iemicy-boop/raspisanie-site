@@ -280,14 +280,16 @@ function renderStamps(data) {
   return out.map(function (s) { return '<span class="stamp">' + esc(s) + '</span>'; }).join('');
 }
 
-/* Часовой пояс расписания. 180 — Москва, 300 — Екатеринбург и т.д.
-   Нужен, чтобы пара считалась идущей по времени колледжа, а не по часам телефона. */
+/* Часовой пояс расписания: минуты от UTC, 180 — Москва, 300 — Екатеринбург.
+   Нужен, чтобы пара считалась идущей по времени колледжа, а не по часам
+   телефона. null — считать по часам устройства. Задаётся в site.txt. */
 var TZ_OFFSET_MIN = 180;
 
 function moment(date, time) {
   var d = /^(\d{1,2})\.(\d{1,2})\.(\d{4})$/.exec(date || '');
   var t = /^(\d{1,2})[:.](\d{2})$/.exec(time || '');
   if (!d || !t) return null;
+  if (TZ_OFFSET_MIN === null) return new Date(+d[3], +d[2] - 1, +d[1], +t[1], +t[2]).getTime();
   return Date.UTC(+d[3], +d[2] - 1, +d[1], +t[1], +t[2]) - TZ_OFFSET_MIN * 60000;
 }
 
@@ -377,7 +379,7 @@ if (typeof document !== 'undefined') (function () {
   var drops = { t: document.getElementById('drop-t'), s: document.getElementById('drop-s') };
   var entries = { t: [], s: [] };
   var cache = {};
-  var site = { name: '', url: '' };
+  var site = { name: '', url: '', tz: '' };
 
   /* Excel иногда отдаётся в другой кодировке — проверяем и перечитываем */
   function decode(buf, contentType) {
@@ -428,19 +430,32 @@ if (typeof document !== 'undefined') (function () {
     paint();
   })();
 
-  /* Расхождение часов клиента и сервера. Берётся из заголовка Date каждого
-     ответа — отдельный запрос ради времени не нужен. Date в ответе из кеша
-     CDN — это время, когда ответ туда положили, поэтому к нему прибавляем
-     Age: без этого часы страницы отстают на возраст кеша, и закончившаяся
-     пара продолжает считаться идущей. */
+  /* Расхождение часов устройства и сервера — на случай, когда на киоске или
+     телефоне сбито время. Date из ответа, пролежавшего в кеше прокси или CDN,
+     показывает не «сейчас», а момент, когда ответ туда положили: часы
+     страницы отстали бы на возраст кеша, и закончившаяся пара продолжала бы
+     считаться идущей. Поэтому время спрашиваем одним запросом с уникальным
+     адресом — мимо любого кеша — и всё равно прибавляем Age, если он есть. */
   var skew = 0;
   function serverNow() { return Date.now() + skew; }
 
-  function get(url) {
-    return fetch(url, { cache: 'no-cache' }).then(function (res) {
-      var d = res.headers ? Date.parse(res.headers.get('date') || '') : NaN;
-      var age = res.headers ? parseInt(res.headers.get('age'), 10) : NaN;
-      if (!isNaN(d)) skew = d + (age > 0 ? age * 1000 : 0) - Date.now();
+  function readClock(res) {
+    var d = res.headers ? Date.parse(res.headers.get('date') || '') : NaN;
+    if (isNaN(d)) return;
+    var age = parseInt(res.headers.get('age'), 10);
+    skew = d + (age > 0 ? age * 1000 : 0) - Date.now();
+    if (Math.abs(skew) > 120000) {
+      console.warn('Расписание: часы сервера и устройства расходятся на ' +
+        Math.round(skew / 60000) + ' мин. Идущая пара считается по времени сервера.');
+    }
+  }
+
+  function get(url, fresh) {
+    /* fresh — запрос с уникальным адресом: нужен там, где важен свежий ответ
+       и заголовок Date, а не то, что лежит в кеше по дороге. */
+    var href = fresh ? url + (url.indexOf('?') < 0 ? '?' : '&') + '_=' + Date.now() : url;
+    return fetch(href, { cache: 'no-cache' }).then(function (res) {
+      if (fresh) readClock(res);
       if (!res.ok) throw new Error(res.status === 404 ? 'нет файла' : 'ошибка ' + res.status);
       return res.arrayBuffer().then(function (buf) {
         return decode(buf, res.headers.get('content-type'));
@@ -493,6 +508,10 @@ if (typeof document !== 'undefined') (function () {
   /* Название колледжа и адрес его сайта — в site.txt, чтобы правка не
      требовала лезть в код. Файла нет — просто шапка без ссылки. */
   function applySite() {
+    if (site.tz) {
+      /* «устройство» / «локально» — не переводить время вовсе */
+      TZ_OFFSET_MIN = /^[-+]?\d+$/.test(site.tz) ? +site.tz : null;
+    }
     var badge = document.querySelector('.badge');
     if (!badge) return;
     if (site.url) {
@@ -523,7 +542,7 @@ if (typeof document !== 'undefined') (function () {
   }
 
   function loadList() {
-    return get('list.txt').then(function (text) {
+    return get('list.txt', true).then(function (text) {
       text.split(/\r?\n/).forEach(function (line) {
         if (!line || line.charAt(0) === '#') return;
         var p = line.split('|');
