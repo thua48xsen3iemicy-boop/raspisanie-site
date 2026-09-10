@@ -138,9 +138,13 @@ body{margin:0;background:var(--paper);color:var(--ink);font:400 16px/1.5 var(--s
 .day__date{font-family:var(--mono);font-size:.76rem;color:var(--ink-2)}
 
 /* Пара */
-.lesson{display:grid;grid-template-columns:4.6rem 1fr;gap:.9rem}
-@media (min-width:44rem){.lesson{grid-template-columns:6rem 1fr;gap:1.2rem}}
-.slot{margin:0;text-align:right;padding-top:.9rem;font-family:var(--mono);line-height:1.35}
+.lesson{display:grid;grid-template-columns:5.4rem 1fr;gap:.9rem}
+@media (min-width:44rem){.lesson{grid-template-columns:6.6rem 1fr;gap:1.2rem}}
+.slot{margin:0;text-align:right;padding:.9rem .7rem .8rem;font-family:var(--mono);line-height:1.35;
+  background:var(--card);border-top:1px solid var(--line);border-right:1px solid var(--line)}
+.lesson:first-of-type .slot{border-top-left-radius:var(--radius)}
+.lesson:last-of-type .slot{border-bottom:1px solid var(--line);
+  border-bottom-left-radius:var(--radius)}
 .slot__no{display:block;font-size:.7rem;color:var(--ink-2)}
 .slot__time{display:block;font-size:.82rem;font-variant-numeric:tabular-nums}
 .slot__time i{display:block;font-style:normal;color:var(--ink-2)}
@@ -165,8 +169,8 @@ body{margin:0;background:var(--paper);color:var(--ink);font:400 16px/1.5 var(--s
   padding:.1rem .4rem;border-radius:4px;background:var(--accent);color:#fff}
 
 /* Окно между парами */
-.lesson--free .lesson__card{background:transparent;border-left-style:dashed}
-.lesson--free .lesson__card:hover{background:transparent}
+.lesson--free .lesson__card{background:var(--card);border-left-style:dashed}
+.lesson--free .lesson__card:hover{background:var(--card)}
 .subject--free{font-weight:500;color:var(--ink-2)}
 
 /* Идёт сейчас: жёлтая полоса и расходящееся кольцо у точки */
@@ -181,7 +185,7 @@ body{margin:0;background:var(--paper);color:var(--ink);font:400 16px/1.5 var(--s
 
 /* Пусто */
 .free{margin:0;padding:.9rem;text-align:center;font-size:.88rem;color:var(--ink-2);
-  border:1px dashed var(--line);border-radius:var(--radius)}
+  background:var(--card);border:1px dashed var(--line);border-radius:var(--radius)}
 .free--week{padding:2.5rem 1rem}
 
 /* Подвал */
