@@ -143,27 +143,27 @@ body{margin:0;background:var(--paper);color:var(--ink);font:400 16px/1.5 var(--s
 .day__name{font-size:1rem;font-weight:700;letter-spacing:-.01em}
 .day__date{margin-left:auto;font-family:var(--mono);font-size:.76rem;color:var(--ink-2)}
 
-/* Пара */
-.lesson{display:grid;grid-template-columns:5.4rem 1fr;gap:.9rem}
-@media (min-width:44rem){.lesson{grid-template-columns:6.6rem 1fr;gap:1.2rem}}
-.slot{margin:0;text-align:right;padding:.9rem .7rem .8rem;font-family:var(--mono);line-height:1.35;
-  background:var(--card);border-top:1px solid var(--line);border-right:1px solid var(--line)}
-.lesson:first-of-type .slot,
-.lesson:first-of-type .lesson__card{border-top:0}
-.lesson:last-of-type .slot{border-bottom:1px solid var(--line);
-  border-bottom-left-radius:var(--radius)}
+/* Пара. Строка — один блок: фон и границы на ней самой, а колонки делит
+   тонкая линия, а не полоса фона страницы между ними. */
+.lesson{display:grid;grid-template-columns:5.4rem 1fr;background:var(--card);
+  border-top:1px solid var(--line);transition:background .15s ease}
+@media (min-width:44rem){.lesson{grid-template-columns:6.6rem 1fr}}
+.lesson:first-of-type{border-top:0}
+.lesson:last-of-type{border-bottom:1px solid var(--line);
+  border-radius:0 0 var(--radius) var(--radius)}
+.lesson:hover{background:color-mix(in srgb,var(--accent) 5%,var(--card))}
+.slot{margin:0;text-align:right;padding:.9rem .7rem .8rem;font-family:var(--mono);
+  line-height:1.35;border-right:1px solid var(--line)}
+.lesson:last-of-type .slot{border-bottom-left-radius:var(--radius)}
 .slot__no{display:block;font-size:.7rem;color:var(--ink-2)}
 .slot__time{display:block;font-size:.82rem;font-variant-numeric:tabular-nums}
 .slot__time i{display:block;font-style:normal;color:var(--ink-2)}
 
-.lesson__card{position:relative;background:var(--card);padding:.8rem 1rem;
-  border-left:1px solid var(--line);border-top:1px solid var(--line);transition:background .15s ease}
-.lesson:last-of-type .lesson__card{border-bottom:1px solid var(--line);
-  border-bottom-right-radius:var(--radius)}
+.lesson__card{position:relative;padding:.8rem 1rem}
+/* точка сидит на разделительной линии — отметка на шкале времени */
 .lesson__card::before{content:"";position:absolute;left:-4px;top:1.05rem;
   width:7px;height:7px;border-radius:50%;background:var(--line)}
-.lesson__card:hover{background:color-mix(in srgb,var(--accent) 5%,var(--card))}
-.lesson__card:hover::before{background:var(--accent)}
+.lesson:hover .lesson__card::before{background:var(--accent)}
 
 .subject{margin:0 0 .3rem;font-size:1rem;font-weight:600;letter-spacing:-.01em}
 .meta{margin:.15rem 0 0;display:flex;flex-wrap:wrap;align-items:center;gap:.3rem .7rem;
@@ -174,21 +174,20 @@ body{margin:0;background:var(--paper);color:var(--ink);font:400 16px/1.5 var(--s
 .tag{font-family:var(--mono);font-size:.64rem;text-transform:uppercase;letter-spacing:.08em;
   padding:.1rem .4rem;border-radius:4px;background:var(--accent);color:#fff}
 
-/* Окно между парами */
-.lesson--free .lesson__card{background:var(--card);border-left-style:dashed}
-.lesson--free .lesson__card:hover{background:var(--card)}
+/* Окно между парами: пунктирный разделитель вместо сплошного */
+.lesson--free .slot{border-right-style:dashed}
+.lesson--free:hover{background:var(--card)}
 .subject--free{font-weight:500;color:var(--ink-2)}
 
 /* Изменение: в выгрузке такая ячейка залита зелёным */
-/* Контур рисуем outline, а не рамкой: соседние карточки делят между собой
+/* Контур рисуем outline, а не рамкой: соседние строки делят между собой
    одну границу, и рамкой замкнутый прямоугольник не получится. */
-.lesson--changed .slot,
-.lesson--changed .lesson__card{border-color:var(--change);
+.lesson--changed{border-color:var(--change);
   outline:1px solid var(--change);outline-offset:-1px;
   animation:pulse-change 3.2s ease-in-out infinite}
-/* у окна контур пунктирный — как и его левая граница */
-.lesson--changed.lesson--free .slot,
-.lesson--changed.lesson--free .lesson__card{outline-style:dashed}
+.lesson--changed .slot{border-right-color:var(--change)}
+/* у окна контур пунктирный — как и его разделитель */
+.lesson--changed.lesson--free{outline-style:dashed}
 .lesson--changed .lesson__card::before{background:var(--change)}
 .tag--change{background:var(--change);color:#1d2b06}
 @keyframes pulse-change{
@@ -224,8 +223,7 @@ body{margin:0;background:var(--paper);color:var(--ink);font:400 16px/1.5 var(--s
 @media (prefers-reduced-motion:reduce){
   *{transition:none!important;animation:none!important}
   /* анимация выключена — заливку задаём статично, иначе изменение потеряется */
-  .lesson--changed .slot,
-  .lesson--changed .lesson__card{background:color-mix(in srgb,var(--change) 18%,var(--card))}
+  .lesson--changed{background:color-mix(in srgb,var(--change) 18%,var(--card))}
 }
 
 @media print{
