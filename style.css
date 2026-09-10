@@ -131,12 +131,9 @@ body{margin:0;background:var(--paper);color:var(--ink);font:400 16px/1.5 var(--s
 
 .divider{margin:0;text-align:center;font-family:var(--mono);font-size:.7rem;
   text-transform:uppercase;letter-spacing:.14em;color:var(--ink-2)}
-@media (max-width:43.99rem){
-  .divider{position:relative}
-  .divider::before,.divider::after{content:"";position:absolute;top:50%;
-    width:calc(50% - 2rem);height:1px;background:var(--line)}
-  .divider::before{left:0}.divider::after{right:0}
-}
+/* Когда поля встают друг под друга, «или» и так очевидно из их порядка,
+   а строку по вертикали занимает — на узком экране убираем. */
+@media (max-width:43.99rem){.divider{display:none}}
 
 /* Дни */
 .schedule{margin-top:1.9rem}
