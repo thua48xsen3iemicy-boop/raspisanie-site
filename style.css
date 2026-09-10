@@ -9,7 +9,8 @@
   --accent:#2b44c7;
   --accent-rgb:43,68,199;
   --mark:#ffd24a;
-  --mark-rgb:255,210,74;
+  --now:#2b44c7;
+  --now-rgb:43,68,199;
   --change:#99cc00;
   --radius:10px;
   --mono:ui-monospace,"SFMono-Regular","Cascadia Mono","Roboto Mono",Consolas,"Liberation Mono",monospace;
@@ -20,11 +21,13 @@
 /* Тёмная тема: по настройке системы, если человек не выбрал светлую вручную. */
 @media (prefers-color-scheme:dark){
   :root:not([data-theme=light]){--paper:#12161d;--card:#191f29;--ink:#e7ecf3;--ink-2:#94a2b4;
-    --line:#2b3441;--accent:#8b9bff;--accent-rgb:139,155,255;--change:#a8dd2e;color-scheme:dark}
+    --line:#2b3441;--accent:#8b9bff;--accent-rgb:139,155,255;--change:#a8dd2e;
+    --now:#ffd24a;--now-rgb:255,210,74;color-scheme:dark}
 }
 /* ...и по кнопке, независимо от настройки системы. */
 :root[data-theme=dark]{--paper:#12161d;--card:#191f29;--ink:#e7ecf3;--ink-2:#94a2b4;
-  --line:#2b3441;--accent:#8b9bff;--accent-rgb:139,155,255;--change:#a8dd2e;color-scheme:dark}
+  --line:#2b3441;--accent:#8b9bff;--accent-rgb:139,155,255;--change:#a8dd2e;
+    --now:#ffd24a;--now-rgb:255,210,74;color-scheme:dark}
 
 *{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%}
@@ -194,14 +197,14 @@ body{margin:0;background:var(--paper);color:var(--ink);font:400 16px/1.5 var(--s
     border-color:var(--change);outline-color:var(--change)}
 }
 
-/* Идёт сейчас: жёлтая полоса и расходящееся кольцо у точки */
-.lesson--now .lesson__card{box-shadow:inset 3px 0 0 var(--mark)}
+/* Идёт сейчас: расходящееся кольцо у точки. Синее на светлой теме,
+   жёлтое на тёмной — на своём фоне каждое заметнее. */
 .lesson--now .lesson__card::before,
-.lesson--now .lesson__card:hover::before{background:var(--mark);
+.lesson--now .lesson__card:hover::before{background:var(--now);
   animation:pulse-dot 3.6s ease-in-out infinite}
 @keyframes pulse-dot{
-  0%,100%{box-shadow:0 0 0 0 rgba(var(--mark-rgb),.55)}
-  50%{box-shadow:0 0 0 10px rgba(var(--mark-rgb),0)}
+  0%,100%{box-shadow:0 0 0 0 rgba(var(--now-rgb),.55)}
+  50%{box-shadow:0 0 0 10px rgba(var(--now-rgb),0)}
 }
 
 /* Пусто */

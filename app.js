@@ -429,14 +429,18 @@ if (typeof document !== 'undefined') (function () {
   })();
 
   /* Расхождение часов клиента и сервера. Берётся из заголовка Date каждого
-     ответа — отдельный запрос ради времени не нужен. */
+     ответа — отдельный запрос ради времени не нужен. Date в ответе из кеша
+     CDN — это время, когда ответ туда положили, поэтому к нему прибавляем
+     Age: без этого часы страницы отстают на возраст кеша, и закончившаяся
+     пара продолжает считаться идущей. */
   var skew = 0;
   function serverNow() { return Date.now() + skew; }
 
   function get(url) {
     return fetch(url, { cache: 'no-cache' }).then(function (res) {
       var d = res.headers ? Date.parse(res.headers.get('date') || '') : NaN;
-      if (!isNaN(d)) skew = d - Date.now();
+      var age = res.headers ? parseInt(res.headers.get('age'), 10) : NaN;
+      if (!isNaN(d)) skew = d + (age > 0 ? age * 1000 : 0) - Date.now();
       if (!res.ok) throw new Error(res.status === 404 ? 'нет файла' : 'ошибка ' + res.status);
       return res.arrayBuffer().then(function (buf) {
         return decode(buf, res.headers.get('content-type'));
@@ -455,6 +459,14 @@ if (typeof document !== 'undefined') (function () {
     }
   }
   setInterval(tick, 60000);
+
+  /* Пока вкладка скрыта, а телефон спит, таймер не идёт: на экране осталась
+     бы подсветка часовой давности. Пересчитываем сразу, как страницу видно. */
+  document.addEventListener('visibilitychange', function () {
+    if (!document.hidden) tick();
+  });
+  window.addEventListener('pageshow', tick);
+  window.addEventListener('focus', tick);
 
   /* ── Списки ── */
 
