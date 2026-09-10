@@ -288,6 +288,7 @@ if (typeof document !== 'undefined') (function () {
   var drops = { t: document.getElementById('drop-t'), s: document.getElementById('drop-s') };
   var entries = { t: [], s: [] };
   var cache = {};
+  var site = { name: '', url: '' };
 
   /* Excel иногда отдаётся в другой кодировке — проверяем и перечитываем */
   function decode(buf, contentType) {
@@ -388,6 +389,38 @@ if (typeof document !== 'undefined') (function () {
     list.innerHTML = html || '<li class="drop__section">Список пуст</li>';
   }
 
+  /* Название колледжа и адрес его сайта — в site.txt, чтобы правка не
+     требовала лезть в код. Файла нет — просто шапка без ссылки. */
+  function applySite() {
+    var badge = document.querySelector('.badge');
+    if (!badge) return;
+    if (site.url) {
+      var label = 'На главную сайта' + (site.name ? ' ' + site.name : ' колледжа');
+      badge.setAttribute('href', site.url);
+      badge.setAttribute('aria-label', label);
+      badge.title = label;
+      badge.removeAttribute('aria-hidden');
+    } else {
+      badge.removeAttribute('href');
+      badge.removeAttribute('aria-label');
+      badge.removeAttribute('title');
+      badge.setAttribute('aria-hidden', 'true');
+    }
+  }
+
+  function loadSite() {
+    return get('site.txt').then(function (text) {
+      text.split(/\r?\n/).forEach(function (line) {
+        if (!line || line.charAt(0) === '#') return;
+        var i = line.indexOf('=');
+        if (i < 0) return;
+        var key = line.slice(0, i).trim().toLowerCase();
+        if (key in site) site[key] = line.slice(i + 1).trim();
+      });
+    }).catch(function () { /* без файла остаются пустые значения */ })
+      .then(applySite);
+  }
+
   function loadList() {
     return get('list.txt').then(function (text) {
       text.split(/\r?\n/).forEach(function (line) {
@@ -481,7 +514,7 @@ if (typeof document !== 'undefined') (function () {
     if (back) back.hidden = !(DIRS[kind] && file);
 
     if (!DIRS[kind] || !file) {
-      els.eyebrow.textContent = 'my-school';
+      els.eyebrow.textContent = site.name;
       els.title.textContent = 'Расписание занятий';
       els.stamps.innerHTML = '';
       document.title = 'Расписание занятий';
@@ -528,7 +561,7 @@ if (typeof document !== 'undefined') (function () {
     route();
   });
 
-  loadList().then(route).catch(function (err) {
+  Promise.all([loadSite(), loadList()]).then(route).catch(function (err) {
     message('Список расписаний не загрузился', 'list.txt — ' + String(err.message || err));
   });
 
