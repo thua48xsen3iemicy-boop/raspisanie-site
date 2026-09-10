@@ -21,8 +21,79 @@ function norm(s) {
   return (s || '').replace(/\u00a0/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
-/* Раскрывает rowspan/colspan: grid[r][c] = {text, origin} */
-function buildGrid(table) {
+/* ── Пометки об изменениях ──────────────────────────────────
+   В выгрузке изменённые ячейки залиты зелёным. Цвет приходит тремя
+   способами: атрибутом bgcolor, инлайновым style и классом из <style>,
+   поэтому смотрим все три. Оттенки можно дописать в список. */
+
+var MARK_COLORS = ['#99cc00'];
+
+function hexColor(v) {
+  v = String(v == null ? '' : v).toLowerCase().replace(/\s+/g, '');
+  var m = /^#([0-9a-f])([0-9a-f])([0-9a-f])$/.exec(v);
+  if (m) return '#' + m[1] + m[1] + m[2] + m[2] + m[3] + m[3];
+  if (/^#[0-9a-f]{6}$/.test(v)) return v;
+  m = /^rgba?\((\d+),(\d+),(\d+)/.exec(v);
+  if (!m) return v;
+  var out = '#';
+  for (var i = 1; i <= 3; i++) {
+    var h = (+m[i]).toString(16);
+    out += h.length < 2 ? '0' + h : h;
+  }
+  return out;
+}
+
+function isMarkColor(v) { return MARK_COLORS.indexOf(hexColor(v)) >= 0; }
+
+/* Цвет внутри значения свойства: «#99CC00», «rgb(153,204,0) none repeat» и т.п. */
+function hasMarkColor(value) {
+  var v = String(value == null ? '' : value).toLowerCase();
+  if (isMarkColor(v)) return true;
+  var tok = /#[0-9a-f]{6}|#[0-9a-f]{3}\b|rgba?\([^)]*\)/g, t;
+  while ((t = tok.exec(v))) if (isMarkColor(t[0])) return true;
+  return false;
+}
+
+function declHasMark(css) {
+  var decl = /background(?:-color)?\s*:\s*([^;]+)/gi, m;
+  while ((m = decl.exec(css))) if (hasMarkColor(m[1])) return true;
+  return false;
+}
+
+/* Excel обычно выносит заливку в класс: <style>.xl65{background:#99CC00}</style> */
+function markedClasses(doc) {
+  var marks = {}, styles = doc.querySelectorAll('style');
+  for (var i = 0; i < styles.length; i++) {
+    var css = (styles[i].textContent || '').replace(/\/\*[\s\S]*?\*\//g, '');
+    var rule = /([^{}]+)\{([^{}]*)\}/g, m;
+    while ((m = rule.exec(css))) {
+      if (!declHasMark(m[2])) continue;
+      m[1].split(',').forEach(function (sel) {
+        var cm = /\.([\w-]+)\s*$/.exec(sel.trim());
+        if (cm) marks[cm[1]] = true;
+      });
+    }
+  }
+  return marks;
+}
+
+function cellMark(td, classMarks) {
+  /* заливку ставят и на ячейку, и на всю строку */
+  var nodes = [td, td.parentNode];
+  for (var i = 0; i < nodes.length; i++) {
+    var el = nodes[i];
+    if (!el || !el.getAttribute) continue;
+    if (isMarkColor(el.getAttribute('bgcolor'))) return true;
+    if (el.style && isMarkColor(el.style.backgroundColor)) return true;
+    if (declHasMark(el.getAttribute('style') || '')) return true;
+    var cls = norm(el.getAttribute('class') || '').split(' ');
+    for (var k = 0; k < cls.length; k++) if (cls[k] && classMarks[cls[k]]) return true;
+  }
+  return false;
+}
+
+/* Раскрывает rowspan/colspan: grid[r][c] = {text, origin, mark} */
+function buildGrid(table, classMarks) {
   var grid = [], rows = table.rows;
   for (var ri = 0; ri < rows.length; ri++) {
     if (!grid[ri]) grid[ri] = [];
@@ -33,10 +104,11 @@ function buildGrid(table) {
       var rs = parseInt(td.getAttribute('rowspan'), 10) || 1;
       var cs = parseInt(td.getAttribute('colspan'), 10) || 1;
       var text = norm(td.textContent);
+      var mark = cellMark(td, classMarks || {});
       for (var r = ri; r < ri + rs; r++) {
         if (!grid[r]) grid[r] = [];
         for (var c = ci; c < ci + cs; c++) {
-          grid[r][c] = { text: text, origin: r === ri && c === ci };
+          grid[r][c] = { text: text, origin: r === ri && c === ci, mark: mark };
         }
       }
       ci += cs;
@@ -47,12 +119,13 @@ function buildGrid(table) {
 
 function at(grid, r, c) { var v = grid[r] && grid[r][c]; return v ? v.text : ''; }
 function own(grid, r, c) { var v = grid[r] && grid[r][c]; return v && v.origin ? v.text : ''; }
+function marked(grid, r, c) { var v = grid[r] && grid[r][c]; return !!(v && v.mark); }
 
 function parseSchedule(doc, fallbackName) {
   var table = doc.querySelector('table');
   if (!table) throw new Error('таблица не найдена');
 
-  var grid = buildGrid(table);
+  var grid = buildGrid(table, markedClasses(doc));
   var nrows = grid.length, ncols = 0, r, c;
   for (r = 0; r < nrows; r++) ncols = Math.max(ncols, (grid[r] || []).length);
 
@@ -123,7 +196,7 @@ function parseSchedule(doc, fallbackName) {
         num: num,
         start: at(grid, r, cols.start).replace('.', ':'),
         end: at(grid, r, cols.end).replace('.', ':'),
-        subject: '', variants: []
+        subject: '', variants: [], changed: false
       };
       day.lessons.push(day.byNum[num]);
     }
@@ -131,6 +204,10 @@ function parseSchedule(doc, fallbackName) {
 
     var subject = own(grid, r, cols.subject);
     if (subject && !lesson.subject) lesson.subject = subject;
+
+    [cols.num, cols.start, cols.end, cols.subject, whoCol, cols.room].forEach(function (c2) {
+      if (c2 !== undefined && marked(grid, r, c2)) lesson.changed = true;
+    });
 
     var who = whoCol !== undefined ? own(grid, r, whoCol) : '';
     var room = cols.room !== undefined ? own(grid, r, cols.room) : '';
@@ -147,7 +224,7 @@ function parseSchedule(doc, fallbackName) {
     /* хвост пустых пар — это просто конец дня, а не окно;
        пустые пары в начале дня показываем: люди привыкли их видеть */
     var b = ls.length;
-    while (b > 0 && ls[b - 1].free) b--;
+    while (b > 0 && ls[b - 1].free && !ls[b - 1].changed) b--;
     day.lessons = ls.slice(0, b);
     day.lessons.forEach(function (l) { if (!l.free) total++; });
   });
@@ -224,10 +301,21 @@ function slot(label, start, end) {
     '<span class="slot__time">' + esc(start) + '<i>' + esc(end) + '</i></span></p>';
 }
 
+/* Подпись рядом с предметом: цвет один в поле не боец — не виден
+   при печати и не читается дальтониками. */
+function changeTag(lesson) {
+  return lesson.changed ? ' <span class="tag tag--change">изменение</span>' : '';
+}
+
+function cls(lesson, extra) {
+  return 'lesson' + (extra || '') + (lesson.changed ? ' lesson--changed' : '');
+}
+
 function renderLesson(day, lesson, kind) {
-  var out = '<article class="lesson"' + span(day, lesson, lesson) + '>' +
+  var out = '<article class="' + cls(lesson) + '"' + span(day, lesson, lesson) + '>' +
     slot(lesson.num + ' пара', lesson.start, lesson.end) +
-    '<div class="lesson__card"><h3 class="subject">' + esc(lesson.subject || 'Занятие') + '</h3>';
+    '<div class="lesson__card"><h3 class="subject">' +
+    esc(lesson.subject || 'Занятие') + changeTag(lesson) + '</h3>';
 
   var split = lesson.variants.length > 1;
   lesson.variants.forEach(function (v, i) {
@@ -245,9 +333,10 @@ function renderLesson(day, lesson, kind) {
 }
 
 function renderFree(day, lesson) {
-  return '<article class="lesson lesson--free"' + span(day, lesson, lesson) + '>' +
+  return '<article class="' + cls(lesson, ' lesson--free') + '"' + span(day, lesson, lesson) + '>' +
     slot(lesson.num + ' пара', lesson.start, lesson.end) +
-    '<div class="lesson__card"><h3 class="subject subject--free">Окно</h3></div></article>';
+    '<div class="lesson__card"><h3 class="subject subject--free">Окно' +
+    changeTag(lesson) + '</h3></div></article>';
 }
 
 function renderSchedule(data) {

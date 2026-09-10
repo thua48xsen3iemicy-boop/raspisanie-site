@@ -10,6 +10,7 @@
   --accent-rgb:43,68,199;
   --mark:#ffd24a;
   --mark-rgb:255,210,74;
+  --change:#99cc00;
   --radius:10px;
   --mono:ui-monospace,"SFMono-Regular","Cascadia Mono","Roboto Mono",Consolas,"Liberation Mono",monospace;
   --sans:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
@@ -19,11 +20,11 @@
 /* Тёмная тема: по настройке системы, если человек не выбрал светлую вручную. */
 @media (prefers-color-scheme:dark){
   :root:not([data-theme=light]){--paper:#12161d;--card:#191f29;--ink:#e7ecf3;--ink-2:#94a2b4;
-    --line:#2b3441;--accent:#8b9bff;--accent-rgb:139,155,255;color-scheme:dark}
+    --line:#2b3441;--accent:#8b9bff;--accent-rgb:139,155,255;--change:#a8dd2e;color-scheme:dark}
 }
 /* ...и по кнопке, независимо от настройки системы. */
 :root[data-theme=dark]{--paper:#12161d;--card:#191f29;--ink:#e7ecf3;--ink-2:#94a2b4;
-  --line:#2b3441;--accent:#8b9bff;--accent-rgb:139,155,255;color-scheme:dark}
+  --line:#2b3441;--accent:#8b9bff;--accent-rgb:139,155,255;--change:#a8dd2e;color-scheme:dark}
 
 *{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%}
@@ -173,6 +174,18 @@ body{margin:0;background:var(--paper);color:var(--ink);font:400 16px/1.5 var(--s
 .lesson--free .lesson__card:hover{background:var(--card)}
 .subject--free{font-weight:500;color:var(--ink-2)}
 
+/* Изменение: в выгрузке такая ячейка залита зелёным */
+.lesson--changed .slot,
+.lesson--changed .lesson__card{animation:pulse-change 3.2s ease-in-out infinite}
+.lesson--changed .lesson__card{border-left-color:var(--change)}
+.lesson--changed:not(.lesson--free) .lesson__card{border-left-style:solid}
+.lesson--changed .lesson__card::before{background:var(--change)}
+.tag--change{background:var(--change);color:#1d2b06}
+@keyframes pulse-change{
+  0%,100%{background:color-mix(in srgb,var(--change) 8%,var(--card))}
+  50%{background:color-mix(in srgb,var(--change) 26%,var(--card))}
+}
+
 /* Идёт сейчас: жёлтая полоса и расходящееся кольцо у точки */
 .lesson--now .lesson__card{box-shadow:inset 3px 0 0 var(--mark)}
 .lesson--now .lesson__card::before,
@@ -194,7 +207,12 @@ body{margin:0;background:var(--paper);color:var(--ink);font:400 16px/1.5 var(--s
 .note{margin:0;border-left:3px solid var(--mark);padding-left:.7rem}
 .stamp-line{margin:0;font-family:var(--mono)}
 
-@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+@media (prefers-reduced-motion:reduce){
+  *{transition:none!important;animation:none!important}
+  /* анимация выключена — заливку задаём статично, иначе изменение потеряется */
+  .lesson--changed .slot,
+  .lesson--changed .lesson__card{background:color-mix(in srgb,var(--change) 18%,var(--card))}
+}
 
 @media print{
   :root{--paper:#fff;--card:#fff;--ink:#000;--ink-2:#444;--line:#bbb}
