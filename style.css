@@ -210,6 +210,11 @@ body{margin:0;background:var(--paper);color:var(--ink);font:400 16px/1.5 var(--s
     border-color:var(--change);outline-color:var(--change)}
 }
 
+/* Заочное отделение: пара пришла из расписания сессии, а не из недельной
+   выгрузки. Метка серая — синий и зелёный уже заняты выбором и изменением. */
+.tag--distance{background:var(--ink-2);color:var(--card)}
+.lesson--distance .lesson__card::before{background:var(--ink-2)}
+
 /* Идёт сейчас: расходящееся кольцо у точки. Синее на светлой теме,
    жёлтое на тёмной — на своём фоне каждое заметнее. */
 .lesson--now .lesson__card::before,

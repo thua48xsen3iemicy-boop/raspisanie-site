@@ -1,8 +1,9 @@
 'use strict';
 /* Расписание: разбор выгрузок Excel прямо в браузере.
-   s/ — группы, t/ — преподаватели, list.txt — сопоставление имён и файлов. */
+   s/ — группы, t/ — преподаватели, z/ — заочное отделение,
+   list.txt — сопоставление имён и файлов. */
 
-var DIRS = { t: 't/', s: 's/' };
+var DIRS = { t: 't/', s: 's/', z: 'z/' };
 
 /* ── Разбор ─────────────────────────────────────────────── */
 
@@ -263,6 +264,213 @@ function firstAfter(grid, r, c, ncols) {
   return '';
 }
 
+/* ── Заочное отделение ──────────────────────────────────────
+   Расписание сессии выгружает другая программа: колонки свои, дата стоит
+   заголовком дня, пар до восьми, а конца пары нет вовсе — он всегда через
+   час двадцать после начала. В каталоге z/ лежат вперемешку файлы групп и
+   преподавателей: что именно открыли, видно по колонкам — у преподавателя
+   есть «Группа», у группы «Преподаватель». */
+
+var SESSION_LABELS = {
+  'дата': 'date', 'пара': 'num', 'время': 'start',
+  'учебнаядисциплина': 'subject', 'учебная дисциплина': 'subject',
+  'дисциплина': 'subject', 'предмет': 'subject',
+  'преподаватель': 'teacher', 'группа': 'group',
+  'кабинет': 'room', 'каб.': 'room', 'каб': 'room'
+};
+var SESSION_LEN_MIN = 80;
+var SESSION_TIME_RE = /^(\d{1,2})[:.](\d{2})(?:[:.]\d{2})?$/;
+var SESSION_STAMP_RE = /^\d{1,2}\.\d{1,2}\.\d{4}\s+\d{1,2}[:.]\d{2}(?:[:.]\d{2})?$/;
+var SESSION_PERIOD_RE = /Период\s+сессии\s+(.+)$/i;
+var SESSION_OWNER_RE = /(?:Преподавател[ья]|Группа)\s*[-–—]?\s*(.+)$/i;
+var DATE_RE = /\d{1,2}\.\d{1,2}\.\d{4}/;
+
+function addMinutes(h, m, add) {
+  var total = (+h * 60 + +m + add) % 1440;
+  if (total < 0) total += 1440;
+  var mm = total % 60;
+  return Math.floor(total / 60) + ':' + (mm < 10 ? '0' + mm : mm);
+}
+
+function firstText(grid, r, ncols) {
+  for (var c = 0; c < ncols; c++) { var t = own(grid, r, c); if (t) return t; }
+  return '';
+}
+
+function parseSession(doc, fallbackName) {
+  var table = doc.querySelector('table');
+  if (!table) throw new Error('таблица не найдена');
+
+  var grid = buildGrid(table, {});
+  var nrows = grid.length, ncols = 0, r, c;
+  for (r = 0; r < nrows; r++) ncols = Math.max(ncols, (grid[r] || []).length);
+
+  /* строка заголовков — та, где сразу и «Пара», и «Время», и дисциплина */
+  var head = -1, cols = {};
+  for (r = 0; r < nrows && head < 0; r++) {
+    var found = {};
+    for (c = 0; c < ncols; c++) {
+      var key = SESSION_LABELS[own(grid, r, c).toLowerCase().replace(/:$/, '')];
+      if (key && found[key] === undefined) found[key] = c;
+    }
+    if (found.num !== undefined && found.start !== undefined && found.subject !== undefined) {
+      head = r; cols = found;
+    }
+  }
+  if (head < 0) throw new Error('не найдена строка заголовков');
+
+  var kind = cols.group !== undefined ? 'teacher' : 'group';
+  var whoCol = kind === 'teacher' ? cols.group : cols.teacher;
+
+  /* шапка: «Расписание сессии. Преподаватель - Иванов В.В.» и период сессии */
+  var owner = '', period = '', m;
+  for (r = 0; r < head; r++) {
+    for (c = 0; c < ncols; c++) {
+      var t = own(grid, r, c);
+      if (!t) continue;
+      if (!period && (m = SESSION_PERIOD_RE.exec(t))) {
+        period = norm(m[1]).replace(/\s*[-–—]\s*/, ' — ');
+      }
+      else if (!owner && (m = SESSION_OWNER_RE.exec(t))) owner = norm(m[1]);
+    }
+  }
+
+  var days = [], index = {}, total = 0, stamp = '', day = null;
+  for (r = head + 1; r < nrows; r++) {
+    var num = at(grid, r, cols.num);
+    var time = SESSION_TIME_RE.exec(at(grid, r, cols.start));
+
+    if (/^\d+$/.test(num) && time) {
+      if (!day) continue;                 /* пара раньше первого дня — не наша */
+      var start = +time[1] + ':' + time[2];
+      var key = num + '|' + start;
+      var lesson = day.byKey[key];
+      if (!lesson) {
+        lesson = day.byKey[key] = {
+          num: num, start: start, end: addMinutes(time[1], time[2], SESSION_LEN_MIN),
+          subject: own(grid, r, cols.subject), variants: [],
+          free: false, changed: false
+        };
+        day.lessons.push(lesson);
+        total++;
+      }
+      var who = whoCol !== undefined ? own(grid, r, whoCol) : '';
+      var room = cols.room !== undefined ? own(grid, r, cols.room) : '';
+      if (who || room) {
+        var dup = lesson.variants.some(function (v) { return v.who === who && v.room === room; });
+        if (!dup) lesson.variants.push({ who: who, room: room });
+      }
+      continue;
+    }
+
+    var text = firstText(grid, r, ncols);
+    if (!text) continue;
+
+    var dm = DAY_RE.exec(text);
+    if (dm) {
+      if (!(text in index)) {
+        index[text] = days.length;
+        days.push({
+          name: dm[1].charAt(0).toUpperCase() + dm[1].slice(1).toLowerCase(),
+          date: DATE_RE.test(dm[2]) ? norm(dm[2]) : '', lessons: [], byKey: {}
+        });
+      }
+      day = days[index[text]];
+      continue;
+    }
+
+    if (SESSION_STAMP_RE.test(text)) stamp = text;
+  }
+
+  days.forEach(function (d) { delete d.byKey; });
+
+  return {
+    kind: kind, owner: owner || fallbackName, session: true,
+    week: '', parity: '', load: '', note: '',
+    period: period, stamp: stamp, days: days, total: total
+  };
+}
+
+/* Начало сегодняшнего дня по времени колледжа — граница «старых» дней. */
+function todayStart(now) {
+  var t = now == null ? Date.now() : now;
+  if (TZ_OFFSET_MIN === null) {
+    var d = new Date(t);
+    return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  }
+  return Math.floor((t + TZ_OFFSET_MIN * 60000) / 86400000) * 86400000 - TZ_OFFSET_MIN * 60000;
+}
+
+/* В выгрузке сессии иногда остаются дни прошедших недель. Исправить это на
+   стороне программы нельзя, поэтому прошедшие дни просто не показываем. */
+function dropPastDays(data, now) {
+  var edge = todayStart(now);
+  data.days = data.days.filter(function (d) {
+    var ts = moment(d.date, '0:00');
+    return ts === null || ts >= edge;
+  });
+  data.total = 0;
+  data.days.forEach(function (d) {
+    d.lessons.forEach(function (l) { if (!l.free) data.total++; });
+  });
+  return data;
+}
+
+function lessonSpan(day, lesson) {
+  var a = moment(day.date, lesson.start), b = moment(day.date, lesson.end);
+  return a && b && b > a ? [a, b] : null;
+}
+
+/* Заочные пары преподавателя показываем не отдельной страницей, а прямо в
+   его недельном расписании — в тех днях, которые в нём уже есть. Пары
+   встают по времени начала; если заочная накладывается на очную, её
+   пропускаем, а свободное окно уступает ей место. */
+function mergeSession(data, session) {
+  var byDate = {};
+  data.days.forEach(function (day) { if (day.date) byDate[day.date] = day; });
+  var added = 0;
+
+  session.days.forEach(function (sday) {
+    var day = byDate[sday.date];
+    if (!day) return;
+
+    sday.lessons.forEach(function (lesson) {
+      var s = lessonSpan(sday, lesson);
+      if (!s) return;
+
+      var busy = false, windows = [];
+      day.lessons.forEach(function (l) {
+        var o = lessonSpan(day, l);
+        if (!o || o[0] >= s[1] || o[1] <= s[0]) return;
+        /* окно, помеченное изменением, несёт смысл — его не трогаем */
+        if (l.free && !l.changed) windows.push(l);
+        else busy = true;
+      });
+      if (busy) return;
+      if (windows.length) {
+        day.lessons = day.lessons.filter(function (l) { return windows.indexOf(l) < 0; });
+      }
+
+      day.lessons.push({
+        num: lesson.num, start: lesson.start, end: lesson.end,
+        subject: lesson.subject, variants: lesson.variants,
+        free: false, changed: false, distance: true
+      });
+      added++;
+    });
+
+    day.lessons.sort(function (a, b) {
+      return (moment(day.date, a.start) || 0) - (moment(day.date, b.start) || 0);
+    });
+  });
+
+  if (added) {
+    data.total += added;
+    data.sessionStamp = session.stamp;
+  }
+  return data;
+}
+
 /* ── Отрисовка ──────────────────────────────────────────── */
 
 function esc(s) {
@@ -274,6 +482,7 @@ function esc(s) {
 function renderStamps(data) {
   var out = [];
   if (data.week) out.push('Неделя № ' + data.week + (data.parity ? ' · ' + data.parity : ''));
+  if (data.period) out.push('Сессия ' + data.period);
   var dates = data.days.map(function (d) { return d.date; }).filter(Boolean);
   if (dates.length) out.push(dates[0] + ' — ' + dates[dates.length - 1]);
   if (data.kind === 'teacher' && data.load) out.push('Нагрузка: ' + data.load);
@@ -309,15 +518,22 @@ function changeTag(lesson) {
   return lesson.changed ? ' <span class="tag tag--change">изменение</span>' : '';
 }
 
+/* Заочная пара в расписании преподавателя пришла из другой выгрузки —
+   без подписи он не поймёт, откуда взялось занятие в девять вечера. */
+function distanceTag(lesson) {
+  return lesson.distance ? ' <span class="tag tag--distance">заочное</span>' : '';
+}
+
 function cls(lesson, extra) {
-  return 'lesson' + (extra || '') + (lesson.changed ? ' lesson--changed' : '');
+  return 'lesson' + (extra || '') + (lesson.changed ? ' lesson--changed' : '') +
+    (lesson.distance ? ' lesson--distance' : '');
 }
 
 function renderLesson(day, lesson, kind) {
   var out = '<article class="' + cls(lesson) + '"' + span(day, lesson, lesson) + '>' +
     slot(lesson.num + ' пара', lesson.start, lesson.end) +
     '<div class="lesson__card"><h3 class="subject">' +
-    esc(lesson.subject || 'Занятие') + changeTag(lesson) + '</h3>';
+    esc(lesson.subject || 'Занятие') + changeTag(lesson) + distanceTag(lesson) + '</h3>';
 
   var split = lesson.variants.length > 1;
   lesson.variants.forEach(function (v, i) {
@@ -342,7 +558,11 @@ function renderFree(day, lesson) {
 }
 
 function renderSchedule(data) {
-  if (!data.total) return '<p class="free free--week">На этой неделе занятий нет</p>';
+  if (!data.total) {
+    return '<p class="free free--week">' +
+      (data.session ? 'В расписании сессии занятий нет' : 'На этой неделе занятий нет') +
+      '</p>';
+  }
 
   return data.days.map(function (day) {
     var out = '<section class="day"><h2 class="day__head">' +
@@ -362,6 +582,9 @@ function renderFoot(data) {
   var out = '';
   if (data.note) out += '<p class="note">' + esc(data.note) + '</p>';
   if (data.stamp) out += '<p class="stamp-line">Выгружено ' + esc(data.stamp) + '</p>';
+  if (data.sessionStamp) {
+    out += '<p class="stamp-line">Заочное отделение выгружено ' + esc(data.sessionStamp) + '</p>';
+  }
   return out;
 }
 
@@ -378,6 +601,9 @@ if (typeof document !== 'undefined') (function () {
   };
   var drops = { t: document.getElementById('drop-t'), s: document.getElementById('drop-s') };
   var entries = { t: [], s: [] };
+  /* zt-строки в списке не показываются: заочные пары преподавателя
+     подмешиваются в его обычное расписание. Здесь — где взять файл. */
+  var sessionOf = {};
   var cache = {};
   var site = { name: '', url: '', tz: '' };
 
@@ -500,7 +726,7 @@ if (typeof document !== 'undefined') (function () {
         prev = head;
         html += '<li class="drop__section">' + esc(head) + '</li>';
       }
-      html += '<li><a href="#' + kind + '/' + esc(it.file) + '">' + esc(it.title) + '</a></li>';
+      html += '<li><a href="#' + it.dir + '/' + esc(it.file) + '">' + esc(it.title) + '</a></li>';
     });
     list.innerHTML = html || '<li class="drop__section">Список пуст</li>';
   }
@@ -541,15 +767,40 @@ if (typeof document !== 'undefined') (function () {
       .then(applySite);
   }
 
+  /* «Иванов В.В.» и «иванов в. в.» — один человек: строки t| и zt|
+     связываются по названию, а не по имени файла. */
+  function nameKey(title) {
+    return norm(title).toLowerCase().replace(/ё/g, 'е').replace(/\s+/g, '');
+  }
+
   function loadList() {
+    /* kind в list.txt: t — преподаватель, s — группа,
+       zt — заочное преподавателя, zs — заочная группа. */
+    var LIST_OF = { t: 't', s: 's', zs: 's' };
+
     return get('list.txt', true).then(function (text) {
+      var session = [];
       text.split(/\r?\n/).forEach(function (line) {
         if (!line || line.charAt(0) === '#') return;
         var p = line.split('|');
         if (p.length < 3) return;
-        var kind = p[0].trim();
-        if (!entries[kind]) return;
-        entries[kind].push({ file: p[1].trim(), title: p[2].trim() });
+        var kind = p[0].trim().toLowerCase();
+        var item = { file: p[1].trim(), title: p[2].trim(), dir: kind === 't' ? 't' : kind === 's' ? 's' : 'z' };
+        if (kind === 'zt') {
+          sessionOf[nameKey(item.title)] = item.file;
+          session.push(item);
+          return;
+        }
+        if (!LIST_OF[kind]) return;
+        entries[LIST_OF[kind]].push(item);
+      });
+
+      /* преподаватель, который ведёт только на заочном, обычного файла не
+         имеет — показываем его в списке с одним расписанием сессии */
+      var known = {};
+      entries.t.forEach(function (it) { known[nameKey(it.title)] = true; });
+      session.forEach(function (it) {
+        if (!known[nameKey(it.title)]) entries.t.push(it);
       });
       ['t', 's'].forEach(function (kind) {
         entries[kind].sort(function (a, b) {
@@ -613,8 +864,8 @@ if (typeof document !== 'undefined') (function () {
   }
 
   function show(data) {
-    els.eyebrow.textContent = data.kind === 'teacher'
-      ? 'Расписание преподавателя' : 'Расписание группы';
+    els.eyebrow.textContent = data.session ? 'Расписание сессии'
+      : data.kind === 'teacher' ? 'Расписание преподавателя' : 'Расписание группы';
     els.title.textContent = data.owner;
     els.stamps.innerHTML = renderStamps(data);
     els.schedule.innerHTML = renderSchedule(data);
@@ -645,20 +896,54 @@ if (typeof document !== 'undefined') (function () {
 
     if (cache[hash]) { show(cache[hash]); return; }
 
-    var known = entries[kind].filter(function (it) { return it.file === file; })[0];
+    var known = lookup(kind, file);
     els.title.textContent = known ? known.title : file;
     els.stamps.innerHTML = '';
     message('Загрузка…');
 
+    var name = known ? known.title : file;
+
     get(DIRS[kind] + file + '.htm').then(function (text) {
-      var doc = new DOMParser().parseFromString(text, 'text/html');
-      var data = parseSchedule(doc, known ? known.title : file);
+      var data = parse(text, kind === 'z' ? parseSession : parseSchedule, name);
+      if (kind === 'z') return dropPastDays(data, serverNow());
+      if (kind !== 't') return data;
+
+      /* у преподавателя может быть ещё и сессия заочников — подмешиваем */
+      var zfile = sessionOf[nameKey(name)] || sessionOf[nameKey(data.owner)];
+      if (!zfile) return data;
+
+      return get(DIRS.z + zfile + '.htm').then(function (ztext) {
+        return mergeSession(data, parse(ztext, parseSession, name));
+      }).catch(function (err) {
+        /* заочное не открылось или разбилось — очное всё равно показываем */
+        console.warn('Расписание заочного отделения: ' + String(err.message || err));
+        return data;
+      });
+    }).then(function (data) {
       cache[hash] = data;
       show(data);
     }).catch(function (err) {
-      els.eyebrow.textContent = kind === 't' ? 'Расписание преподавателя' : 'Расписание группы';
+      /* заочная группа лежит в z/ — по каталогу её от преподавателя не отличить */
+      var group = known ? entries.s.indexOf(known) >= 0 : kind === 's';
+      els.eyebrow.textContent = group ? 'Расписание группы' : 'Расписание преподавателя';
       message('Расписание не открылось', String(err.message || err));
     });
+  }
+
+  function parse(text, how, name) {
+    return how(new DOMParser().parseFromString(text, 'text/html'), name);
+  }
+
+  /* Заочная группа лежит в z/ и попадает в общий список групп, поэтому
+     ищем по каталогу из ссылки, а не по виду расписания. */
+  function lookup(dir, file) {
+    var found = null;
+    ['t', 's'].forEach(function (kind) {
+      entries[kind].forEach(function (it) {
+        if (!found && it.dir === dir && it.file === file) found = it;
+      });
+    });
+    return found;
   }
 
   /* ── Кнопка «Назад» ──
@@ -689,5 +974,9 @@ if (typeof document !== 'undefined') (function () {
 
 /* для тестов вне браузера */
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { parseSchedule: parseSchedule, renderSchedule: renderSchedule, renderStamps: renderStamps };
+  module.exports = {
+    parseSchedule: parseSchedule, parseSession: parseSession,
+    mergeSession: mergeSession, dropPastDays: dropPastDays,
+    renderSchedule: renderSchedule, renderStamps: renderStamps
+  };
 }
